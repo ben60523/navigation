@@ -19,6 +19,8 @@ find_package(catkin REQUIRED
     tf2_geometry_msgs
     tf2_msgs
     tf2_ros
+    std_msgs
+    message_generation
 )
 
 find_package(Boost REQUIRED)
@@ -26,6 +28,16 @@ find_package(Boost REQUIRED)
 # dynamic reconfigure
 generate_dynamic_reconfigure_options(
     cfg/AMCL.cfg
+)
+
+add_service_files(
+    FILES
+    redist_pp.srv
+)
+
+generate_messages(
+    DEPENDENCIES
+    std_msgs
 )
 
 catkin_package(
@@ -41,6 +53,8 @@ catkin_package(
     tf2
     tf2_msgs
     tf2_ros
+    std_msgs
+    message_runtime
   INCLUDE_DIRS include
   LIBRARIES amcl_sensors amcl_map amcl_pf
 )

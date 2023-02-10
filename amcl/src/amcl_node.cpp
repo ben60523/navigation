@@ -36,6 +36,7 @@
 #include "amcl/pf/pf.h"
 #include "amcl/sensors/amcl_odom.h"
 #include "amcl/sensors/amcl_laser.h"
+#include "amcl/redist_pp.h"
 #include "portable_utils.hpp"
 
 #include "ros/assert.h"
@@ -93,6 +94,15 @@ typedef struct
   pf_matrix_t pf_pose_cov;
 
 } amcl_hyp_t;
+
+typedef struct
+{
+  map_t* map;
+  double xmin;
+  double xmax;
+  double ymin;
+  double ymax;
+} local_pose_data;
 
 static double
 normalize(double z)
@@ -159,12 +169,15 @@ class AmclNode
     // Pose-generating function used to uniformly distribute particles over
     // the map
     static pf_vector_t uniformPoseGenerator(void* arg);
+    static pf_vector_t localPoseGenerator(void* arg);
 #if NEW_UNIFORM_SAMPLING
     static std::vector<std::pair<int,int> > free_space_indices;
 #endif
     // Callbacks
     bool globalLocalizationCallback(std_srvs::Empty::Request& req,
                                     std_srvs::Empty::Response& res);
+    bool redistParticlePointsCallback(redist_pp::Request& req,
+                                      redist_pp::Response& res);
     bool nomotionUpdateCallback(std_srvs::Empty::Request& req,
                                     std_srvs::Empty::Response& res);
     bool setMapCallback(nav_msgs::SetMap::Request& req,
@@ -180,14 +193,15 @@ class AmclNode
     map_t* convertMap( const nav_msgs::OccupancyGrid& map_msg );
     void updatePoseFromServer();
     void applyInitialPose();
+    void AutoReInitialPose(geometry_msgs::PoseWithCovarianceStamped & last_pose);
 
-    //parameter for which odom to use
+    //parameter for what odom to use
     std::string odom_frame_id_;
 
     //paramater to store latest odom pose
     geometry_msgs::PoseStamped latest_odom_pose_;
 
-    //parameter for which base to use
+    //parameter for what base to use
     std::string base_frame_id_;
     std::string global_frame_id_;
 
@@ -204,7 +218,7 @@ class AmclNode
     char* mapdata;
     int sx, sy;
     double resolution;
-
+    local_pose_data area;
     message_filters::Subscriber<sensor_msgs::LaserScan>* laser_scan_sub_;
     tf2_ros::MessageFilter<sensor_msgs::LaserScan>* laser_scan_filter_;
     ros::Subscriber initial_pose_sub_;
@@ -225,7 +239,7 @@ class AmclNode
 
     //Nomotion update control
     bool m_force_update;  // used to temporarily let amcl update samples even when no motion occurs...
-
+    bool autoReInitialFlag;
     AMCLOdom* odom_;
     AMCLLaser* laser_;
 
@@ -253,6 +267,7 @@ class AmclNode
     ros::ServiceServer global_loc_srv_;
     ros::ServiceServer nomotion_update_srv_; //to let amcl update samples without requiring motion
     ros::ServiceServer set_map_srv_;
+    ros::ServiceServer redist_pp_srv_; // Re-distribute Particle Points on the certain area (edited at 2022-08-17)
     ros::Subscriber initial_pose_sub_old_;
     ros::Subscriber map_sub_;
 
@@ -479,6 +494,10 @@ AmclNode::AmclNode() :
   global_loc_srv_ = nh_.advertiseService("global_localization", 
 					 &AmclNode::globalLocalizationCallback,
                                          this);
+  redist_pp_srv_ = nh_.advertiseService("redist_pp", 
+					 &AmclNode::redistParticlePointsCallback,
+                                         this);
+
   nomotion_update_srv_= nh_.advertiseService("request_nomotion_update", &AmclNode::nomotionUpdateCallback, this);
   set_map_srv_= nh_.advertiseService("set_map", &AmclNode::setMapCallback, this);
 
@@ -1085,9 +1104,41 @@ AmclNode::uniformPoseGenerator(void* arg)
   return p;
 }
 
+pf_vector_t
+AmclNode::localPoseGenerator(void* arg)
+{
+  local_pose_data* data = (local_pose_data*)arg;
+  map_t* map = data->map;
+  double min_x, max_x, min_y, max_y;
+
+  min_x = data->xmin;
+  max_x = data->xmax;
+  min_y = data->ymin;
+  max_y = data->ymax;
+
+  pf_vector_t p;
+
+  ROS_DEBUG("Generating new uniform sample");
+  for(;;)
+  {
+    p.v[0] = min_x + drand48() * (max_x - min_x);
+    p.v[1] = min_y + drand48() * (max_y - min_y);
+    p.v[2] = drand48() * 2 * M_PI - M_PI;
+    // Check that it's a free cell
+    int i,j;
+    i = MAP_GXWX(map, p.v[0]);
+    j = MAP_GYWY(map, p.v[1]);
+    if(MAP_VALID(map,i,j) && (map->cells[MAP_INDEX(map,i,j)].occ_state == -1))
+        break;
+  }
+
+  return p;
+}
+
+
 bool
 AmclNode::globalLocalizationCallback(std_srvs::Empty::Request& req,
-                                     std_srvs::Empty::Response& res)
+                                     std_srvs::Empty::Response& res)    
 {
   if( map_ == NULL ) {
     return true;
@@ -1095,9 +1146,34 @@ AmclNode::globalLocalizationCallback(std_srvs::Empty::Request& req,
   boost::recursive_mutex::scoped_lock gl(configuration_mutex_);
   ROS_INFO("Initializing with uniform distribution");
   pf_init_model(pf_, (pf_init_model_fn_t)AmclNode::uniformPoseGenerator,
-                (void *)map_);
+                (void *)map_); 
+
   ROS_INFO("Global initialisation done!");
   pf_init_ = false;
+  return true;
+}
+
+bool
+AmclNode::redistParticlePointsCallback(redist_pp::Request& req,
+		                               redist_pp::Response& res)
+{
+  if( map_ == NULL) {
+    return true;
+  }
+  boost::recursive_mutex::scoped_lock rppl(configuration_mutex_);
+  ROS_INFO("Redistribute particle points");
+  //local_pose_data *data;
+  area.map = map_;
+  area.xmin = req.xmin;
+  area.xmax = req.xmax;
+  area.ymin = req.ymin;
+  area.ymax = req.ymax; 
+  
+  pf_init_model(pf_, (pf_init_model_fn_t)AmclNode::localPoseGenerator,
+                (void *)&area);
+  pf_init_ = false;
+  ROS_INFO("Redistribute particle points done");
+  res.res = true;
   return true;
 }
 
@@ -1135,7 +1211,6 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
   }
   boost::recursive_mutex::scoped_lock lr(configuration_mutex_);
   int laser_index = -1;
-
   // Do we have the base->base_laser Tx yet?
   if(frame_to_laser_.find(laser_scan_frame_id) == frame_to_laser_.end())
   {
@@ -1204,8 +1279,21 @@ AmclNode::laserReceived(const sensor_msgs::LaserScanConstPtr& laser_scan)
     bool update = fabs(delta.v[0]) > d_thresh_ ||
                   fabs(delta.v[1]) > d_thresh_ ||
                   fabs(delta.v[2]) > a_thresh_;
+
     update = update || m_force_update;
-    m_force_update=false;
+    pf_sample_set_t *tmp = pf_->sets + pf_->current_set;
+    if (tmp->sample_count < (min_particles_ + 200) && m_force_update == true)
+    {
+      if (!autoReInitialFlag)
+      {
+         AutoReInitialPose(last_published_pose);
+      }
+      else
+      {
+        m_force_update=false;
+      }
+      autoReInitialFlag = true;
+    }
 
     // Set the laser update flags
     if(update)
@@ -1611,6 +1699,8 @@ AmclNode::handleInitialPoseMessage(const geometry_msgs::PoseWithCovarianceStampe
   initial_pose_hyp_->pf_pose_mean = pf_init_pose_mean;
   initial_pose_hyp_->pf_pose_cov = pf_init_pose_cov;
   applyInitialPose();
+  m_force_update = true;
+  autoReInitialFlag = false;
 }
 
 /**
@@ -1654,3 +1744,27 @@ AmclNode::standardDeviationDiagnostics(diagnostic_updater::DiagnosticStatusWrapp
     diagnostic_status.summary(diagnostic_msgs::DiagnosticStatus::OK, "OK");
   }
 }
+
+void AmclNode::AutoReInitialPose(geometry_msgs::PoseWithCovarianceStamped & last_pose)
+{
+  tf2::Transform pose_new;
+  tf2::convert(last_pose.pose.pose, pose_new);
+  pf_vector_t pf_init_pose_mean = pf_vector_zero();
+  pf_init_pose_mean.v[0] = pose_new.getOrigin().x();
+  pf_init_pose_mean.v[1] = pose_new.getOrigin().y();
+  pf_init_pose_mean.v[2] = tf2::getYaw(pose_new.getRotation());
+  pf_matrix_t pf_init_pose_cov = pf_matrix_zero();
+  // Copy in the covariance, converting from 6-D to 3-D
+ 
+  pf_init_pose_cov.m[0][0] = 0.25;
+  pf_init_pose_cov.m[1][1] = 0.25;
+  pf_init_pose_cov.m[2][2] = 4.0/180.0*M_PI;
+
+  delete initial_pose_hyp_;
+  initial_pose_hyp_ = new amcl_hyp_t();
+  initial_pose_hyp_->pf_pose_mean = pf_init_pose_mean;
+  initial_pose_hyp_->pf_pose_cov = pf_init_pose_cov;
+  applyInitialPose();
+  pf_init_=true;
+}
+
