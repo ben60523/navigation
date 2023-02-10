@@ -1,0 +1,55 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/root/msk_robot_ros/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/amcl/include/**",
+        "/root/msk_robot_ros/src/apriltag_ros/apriltag_ros/include/**",
+        "/root/msk_robot_ros/src/ros_astra_camera/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/base_local_planner/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/carrot_planner/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/clear_costmap_recovery/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/costmap_2d/include/**",
+        "/root/msk_robot_ros/src/depthimage_to_laserscan-melodic-devel/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/dwa_local_planner/include/**",
+        "/root/msk_robot_ros/src/fdilink_ahrs/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/global_planner/include/**",
+        "/root/msk_robot_ros/src/lsn10/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/map_server/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/move_base/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/move_slow_and_clear/include/**",
+        "/root/msk_robot_ros/src/msk_planner/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/nav_core/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/navfn/include/**",
+        "/root/msk_robot_ros/src/slam_karto/open_karto-melodic-devel/include/**",
+        "/root/msk_robot_ros/src/range_sensor_layer/include/**",
+        "/root/msk_robot_ros/src/robot_control_interface/include/**",
+        "/root/msk_robot_ros/src/robot_pose_ekf/include/**",
+        "/root/msk_robot_ros/src/ros_lora_receiver/include/**",
+        "/root/msk_robot_ros/src/ros_tensorflow/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/rotate_recovery/include/**",
+        "/root/msk_robot_ros/src/rrt_exploration/include/**",
+        "/root/msk_robot_ros/src/sonar_hc_sr04_rpi/include/**",
+        "/root/msk_robot_ros/src/slam_karto/sparse_bundle_adjustment-melodic-devel/include/**",
+        "/root/msk_robot_ros/src/teb_local_planner-melodic-devel/include/**",
+        "/root/msk_robot_ros/src/turn_on_wheeltec_robot/include/**",
+        "/root/msk_robot_ros/src/unique_identifier/unique_id/include/**",
+        "/root/msk_robot_ros/src/usb_cam/include/**",
+        "/root/msk_robot_ros/src/navigation-melodic/voxel_grid/include/**",
+        "/root/msk_robot_ros/src/web_video_server/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-arm64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
