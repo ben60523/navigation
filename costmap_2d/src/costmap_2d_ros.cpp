@@ -94,7 +94,7 @@ Costmap2DROS::Costmap2DROS(const std::string& name, tf2_ros::Buffer& tf) :
     ros::spinOnce();
     if (last_error + ros::Duration(5.0) < ros::Time::now())
     {
-      ROS_WARN("Timed out waiting for transform from %s to %s to become available before running costmap, tf error: %s",
+      ROS_WARN_ONCE("Timed out waiting for transform from %s to %s to become available before running costmap, tf error: %s",
                robot_base_frame_.c_str(), global_frame_.c_str(), tf_error.c_str());
       last_error = ros::Time::now();
     }

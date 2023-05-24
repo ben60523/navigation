@@ -874,7 +874,7 @@ AmclNode::requestMap()
   ROS_INFO("Requesting the map...");
   while(!ros::service::call("static_map", req, resp))
   {
-    ROS_WARN("Request for map failed; trying again...");
+    ROS_WARN_ONCE("Request for map failed; trying again...");
     ros::Duration d(0.5);
     d.sleep();
   }
